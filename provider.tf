@@ -17,7 +17,7 @@ terraform {
   backend "s3" {
     bucket               = "kwe3tier"
     key                  = "3tier/terraform.tfstate"
-    region               = "eu-west-2"
+    region               = "us-east-1"
     encrypt              = true
     workspace_key_prefix = "envs"
     use_lockfile         = true
