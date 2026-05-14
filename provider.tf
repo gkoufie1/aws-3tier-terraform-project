@@ -12,15 +12,15 @@ terraform {
     }
   }
 
-  # Before first apply: create this S3 bucket and DynamoDB table manually (or via bootstrap script)
   # State paths: envs/<workspace>/3tier/terraform.tfstate
+  # use_lockfile replaces dynamodb_table (deprecated in Terraform 1.10+) — uses S3 conditional writes
   backend "s3" {
     bucket               = "kwe3tier"
     key                  = "3tier/terraform.tfstate"
-    region               = "us-east-1"
-    dynamodb_table       = "terraform-state-locks"
+    region               = "eu-west-2"
     encrypt              = true
     workspace_key_prefix = "envs"
+    use_lockfile         = true
   }
 }
 
