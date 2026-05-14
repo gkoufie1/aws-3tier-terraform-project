@@ -15,10 +15,10 @@ terraform {
   # Before first apply: create this S3 bucket and DynamoDB table manually (or via bootstrap script)
   # State paths: envs/<workspace>/3tier/terraform.tfstate
   backend "s3" {
-    bucket               = "your-terraform-state-bucket"
+    bucket               = "kwe3tier"
     key                  = "3tier/terraform.tfstate"
     region               = "us-east-1"
-    dynamodb_table       = "terraform-locks"
+    dynamodb_table       = "terraform-state-locks"
     encrypt              = true
     workspace_key_prefix = "envs"
   }
@@ -29,8 +29,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ManagedBy   = "Terraform"
-      Repository  = "aws-3tier-terraform"
+      ManagedBy  = "Terraform"
+      Repository = "aws-3tier-terraform"
     }
   }
 }
