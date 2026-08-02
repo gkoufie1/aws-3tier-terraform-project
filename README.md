@@ -189,6 +189,10 @@ curl http://$ALB/         # {"message":"...","environment":"dev","database":"con
 curl http://$ALB/db       # {"database":"connected","time":"..."}
 ```
 
+**Verified live** (prod, 2026-08-02) — health check, root, and DB connectivity all responding through the ALB:
+
+![Live demo response](docs/screenshots/prod-demo.png)
+
 ---
 
 ## CI/CD Pipeline
