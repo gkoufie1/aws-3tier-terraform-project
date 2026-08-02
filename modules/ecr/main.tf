@@ -1,6 +1,10 @@
 resource "aws_ecr_repository" "app" {
   name                 = "${var.app_name}-${var.environment}"
   image_tag_mutability = "MUTABLE"
+  # dev is destroyed/recreated on demand for interview demos — force_delete
+  # lets that work even with images still in the repo. prod keeps the safety
+  # net (matches deletion_protection on the ALB/RDS for this environment).
+  force_delete = var.environment != "prod"
 
   image_scanning_configuration {
     scan_on_push = true
