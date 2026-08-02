@@ -17,15 +17,15 @@ resource "aws_secretsmanager_secret" "db" {
 }
 
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier     = "${var.app_name}-${var.environment}-aurora"
-  engine                 = "aurora-postgresql"
-  engine_version         = "15.4"
-  database_name          = var.db_name
-  master_username        = var.db_username
-  master_password        = random_password.master.result
-  db_subnet_group_name   = var.database_subnet_group_name
-  vpc_security_group_ids = [var.rds_sg_id]
-  storage_encrypted      = true
+  cluster_identifier      = "${var.app_name}-${var.environment}-aurora"
+  engine                  = "aurora-postgresql"
+  engine_version          = "15.4"
+  database_name           = var.db_name
+  master_username         = var.db_username
+  master_password         = random_password.master.result
+  db_subnet_group_name    = var.database_subnet_group_name
+  vpc_security_group_ids  = [var.rds_sg_id]
+  storage_encrypted       = true
   backup_retention_period = var.environment == "prod" ? 7 : 1
 
   skip_final_snapshot       = var.environment != "prod"
