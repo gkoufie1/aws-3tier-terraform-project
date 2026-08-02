@@ -5,6 +5,13 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Stand up or tear down the dev demo environment"
+        type: choice
+        options: [apply, destroy]
+        default: apply
 
 permissions:
   id-token: write   # OIDC token for aws-actions/configure-aws-credentials
@@ -175,3 +182,78 @@ jobs:
             --cluster "${{ env.APP_NAME }}-prod-cluster" \
             --services "${{ env.APP_NAME }}-prod-service" \
             --region  "${{ env.AWS_REGION }}"
+
+  # ── On-demand demo environment (manual trigger only, dev workspace) ─────────
+  # dev has no deletion_protection on the ALB/RDS, so destroy always succeeds —
+  # use this to stand the app up before an interview and tear it down after.
+  demo-dispatch:
+    name: "Demo: ${{ github.event.inputs.action }} (dev)"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Select dev workspace
+        run: terraform workspace select dev || terraform workspace new dev
+
+      - name: Terraform Apply (dev)
+        if: github.event.inputs.action == 'apply'
+        run: terraform apply -auto-approve
+
+      - name: Login to Amazon ECR
+        if: github.event.inputs.action == 'apply'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        if: github.event.inputs.action == 'apply'
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          REPOSITORY=$(terraform output -raw ecr_repository_url | cut -d/ -f2)
+          docker build --tag "$REGISTRY/$REPOSITORY:latest" ./app
+          docker push "$REGISTRY/$REPOSITORY:latest"
+
+      - name: Force ECS redeployment (dev)
+        if: github.event.inputs.action == 'apply'
+        run: |
+          aws ecs update-service \
+            --cluster  "$(terraform output -raw ecs_cluster_name)" \
+            --service  "$(terraform output -raw ecs_service_name)" \
+            --force-new-deployment \
+            --region   "${{ env.AWS_REGION }}"
+
+      - name: Wait for ECS service stability
+        if: github.event.inputs.action == 'apply'
+        run: |
+          aws ecs wait services-stable \
+            --cluster  "$(terraform output -raw ecs_cluster_name)" \
+            --services "$(terraform output -raw ecs_service_name)" \
+            --region   "${{ env.AWS_REGION }}"
+
+      - name: Print demo URL
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "### Demo environment is live" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**URL:** http://$(terraform output -raw alb_dns_name)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Remember to re-run this workflow with \`destroy\` when you're done to stop billing." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Terraform Destroy (dev)
+        if: github.event.inputs.action == 'destroy'
+        run: terraform destroy -auto-approve

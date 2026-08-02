@@ -213,6 +213,16 @@ The GitHub Actions workflow in [.github/workflows/terraform.yml](.github/workflo
 
 **Required GitHub secret**: `AWS_ROLE_ARN` — an IAM role configured for OIDC federation with GitHub Actions (no long-lived access keys).
 
+### On-Demand Demo Environment
+
+The same workflow also accepts a manual trigger (`workflow_dispatch`) against the `dev` workspace, so the whole stack can be stood up before a demo/interview and torn down right after — no local Terraform needed:
+
+1. Go to **Actions → CI/CD Pipeline → Run workflow**
+2. Choose `apply` — builds the image, stands up the infra, and prints the live URL in the run's summary (~5-10 min, Aurora is the slow part)
+3. When you're done, run the workflow again with `destroy` to stop billing
+
+`dev` has no `deletion_protection`, unlike `prod`, so `destroy` always succeeds cleanly. Note the ALB gets a new DNS hostname each time it's recreated — check the run summary for the current URL rather than bookmarking one.
+
 ---
 
 ## Key Design Decisions
