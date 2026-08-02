@@ -10,19 +10,19 @@ Production-grade AWS infrastructure using Terraform — ECS Fargate + Aurora Pos
 flowchart TD
     Internet((Internet))
 
-    subgraph VPC["VPC — 10.0.0.0/16  (us-east-1)"]
+    subgraph VPC["VPC — 10.0.0.0/16  (eu-west-2)"]
         direction TB
 
-        subgraph PublicSubnets["Public Subnets — us-east-1a & us-east-1b"]
+        subgraph PublicSubnets["Public Subnets — eu-west-2a & eu-west-2b"]
             ALB["Application Load Balancer\nPort 80 / 443"]
             NGW["NAT Gateway"]
         end
 
-        subgraph PrivateSubnets["Private Subnets — us-east-1a & us-east-1b"]
+        subgraph PrivateSubnets["Private Subnets — eu-west-2a & eu-west-2b"]
             ECS["ECS Fargate Tasks\nNode.js · Port 3000"]
         end
 
-        subgraph DBSubnets["Database Subnets — us-east-1a & us-east-1b"]
+        subgraph DBSubnets["Database Subnets — eu-west-2a & eu-west-2b"]
             RDS[("Aurora PostgreSQL 15\nPort 5432")]
         end
     end
@@ -31,7 +31,7 @@ flowchart TD
         ECR["Amazon ECR\nContainer Registry"]
         SM["Secrets Manager\nDB Credentials JSON"]
         CW["CloudWatch Logs\n/ecs/threetier/env"]
-        TF["S3 + DynamoDB\nTerraform State & Locks"]
+        TF["S3\nTerraform State & Lockfile"]
     end
 
     Internet -->|"HTTP :80"| ALB
@@ -93,12 +93,12 @@ aws-3tier-terraform/
 
 | Tool | Version | Purpose |
 |---|---|---|
-| Terraform | >= 1.5 | Infrastructure provisioning |
+| Terraform | >= 1.10 | Infrastructure provisioning |
 | AWS CLI | v2 | Authentication, ECR login, ECS deploy |
 | Docker | any | Build and push container images |
 | Git | any | Clone and version control |
 
-An AWS IAM user or role with permissions covering: VPC, ECS, ECR, RDS, ALB, IAM, Secrets Manager, CloudWatch, S3, DynamoDB.
+An AWS IAM user or role with permissions covering: VPC, ECS, ECR, RDS, ALB, IAM, Secrets Manager, CloudWatch, S3.
 
 ---
 
@@ -115,40 +115,29 @@ Environments are driven by **Terraform workspaces**. All resource names include 
 
 ## Deployment
 
-### 1 — Bootstrap the State Backend (once)
+### 1 — Bootstrap the State Backend (once per AWS account)
+
+`provider.tf` points at a specific bucket (`kwe3tier`, `eu-west-2`) and uses `use_lockfile = true` — S3-native conditional-write locking (Terraform >= 1.10), so no DynamoDB lock table is needed. Create the bucket once before the first `terraform init`:
 
 ```bash
-# Create a globally unique S3 bucket for Terraform state
-BUCKET="threetier-tf-state-$(aws sts get-caller-identity --query Account --output text)"
+aws s3api create-bucket --bucket kwe3tier --region eu-west-2 \
+  --create-bucket-configuration LocationConstraint=eu-west-2
 
-aws s3api create-bucket --bucket "$BUCKET" --region us-east-1
-aws s3api put-bucket-versioning --bucket "$BUCKET" \
+aws s3api put-bucket-versioning --bucket kwe3tier \
   --versioning-configuration Status=Enabled
-aws s3api put-bucket-encryption --bucket "$BUCKET" \
+
+aws s3api put-bucket-encryption --bucket kwe3tier \
   --server-side-encryption-configuration \
   '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-aws s3api put-public-access-block --bucket "$BUCKET" \
+
+aws s3api put-public-access-block --bucket kwe3tier \
   --public-access-block-configuration \
   "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-
-# State locking table
-aws dynamodb create-table \
-  --table-name terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
 ```
 
-### 2 — Configure the Backend
+If you fork this repo for your own account, change the `bucket` value in `provider.tf` to a globally-unique name of your own first.
 
-Replace the placeholder in `provider.tf`:
-
-```bash
-sed -i "s/your-terraform-state-bucket/$BUCKET/" provider.tf
-```
-
-### 3 — Deploy Infrastructure
+### 2 — Deploy Infrastructure
 
 ```bash
 terraform init
@@ -160,11 +149,11 @@ terraform apply
 
 > Aurora takes 8–12 minutes to provision. Total apply time is ~20 minutes.
 
-### 4 — Build and Push the Docker Image
+### 3 — Build and Push the Docker Image
 
 ```bash
 ECR_URL=$(terraform output -raw ecr_repository_url)
-REGION="us-east-1"
+REGION="eu-west-2"
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 
 aws ecr get-login-password --region $REGION | \
@@ -175,7 +164,7 @@ docker tag  threetier-app:latest "$ECR_URL:latest"
 docker push "$ECR_URL:latest"
 ```
 
-### 5 — Deploy the Container
+### 4 — Deploy the Container
 
 ```bash
 aws ecs update-service \
@@ -190,7 +179,7 @@ aws ecs wait services-stable \
   --region   $REGION
 ```
 
-### 6 — Verify
+### 5 — Verify
 
 ```bash
 ALB=$(terraform output -raw alb_dns_name)

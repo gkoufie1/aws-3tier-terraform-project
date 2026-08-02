@@ -41,10 +41,10 @@ resource "aws_ecs_task_definition" "app" {
     }]
 
     environment = [
-      { name = "ENVIRONMENT",  value = var.environment },
-      { name = "PORT",         value = tostring(var.container_port) },
+      { name = "ENVIRONMENT", value = var.environment },
+      { name = "PORT", value = tostring(var.container_port) },
       { name = "DB_SECRET_ARN", value = var.db_secret_arn },
-      { name = "AWS_REGION",   value = var.aws_region }
+      { name = "AWS_REGION", value = var.aws_region }
     ]
 
     logConfiguration = {
