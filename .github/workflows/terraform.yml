@@ -28,6 +28,9 @@ jobs:
   terraform-plan:
     name: Terraform Validate & Plan
     runs-on: ubuntu-latest
+    # workflow_dispatch is handled exclusively by demo-dispatch below — running
+    # both against the same dev state concurrently causes a state-lock conflict
+    if: github.event_name != 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
