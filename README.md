@@ -193,6 +193,11 @@ curl http://$ALB/db       # {"database":"connected","time":"..."}
 
 ![Live demo response](docs/screenshots/prod-demo.png)
 
+This pipeline had never successfully run end-to-end before this — see
+[docs/POSTMORTEM.md](docs/POSTMORTEM.md) for the real bugs that had to be
+fixed to get here (missing IAM permissions, a deprecated Aurora version, a
+state-lock race, and more).
+
 ---
 
 ## CI/CD Pipeline
